@@ -79,7 +79,7 @@ int registerTests(
 		_enforceViaYul,
 		_enforceCompileToEwasm,
 		solidity::test::CommonOptions::get().enforceGasTest,
-		solidity::test::CommonOptions::get().enforceGasTestMinValue
+		solidity::test::CommonOptions::get().enforceGasTestMinValue,
 	};
 	if (fs::is_directory(fullpath))
 	{

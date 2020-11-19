@@ -61,49 +61,49 @@ SemanticTest::SemanticTest(
 	m_enforceViaYul(_enforceViaYul),
 	m_enforceCompileToEwasm(_enforceCompileToEwasm),
 	m_enforceGasCost(_enforceGasCost),
-	m_enforceGasCostMinValue(_enforceGasCostMinValue)
+	m_enforceGasCostMinValue(std::move(_enforceGasCostMinValue))
 {
-	string choice = m_reader.stringSetting("compileViaYul", "default");
-	if (choice == "also")
+	string compileViaYul = m_reader.stringSetting("compileViaYul", "default");
+	if (compileViaYul == "also")
 	{
-		m_runWithYul = true;
-		m_runWithoutYul = true;
+		m_testCaseWantsYulRun = true;
+		m_testCaseWantsLegacyRun = true;
 	}
-	else if (choice == "true")
+	else if (compileViaYul == "true")
 	{
-		m_runWithYul = true;
-		m_runWithoutYul = false;
+		m_testCaseWantsYulRun = true;
+		m_testCaseWantsLegacyRun = false;
 	}
-	else if (choice == "false")
+	else if (compileViaYul == "false")
 	{
-		m_runWithYul = false;
-		m_runWithoutYul = true;
-		// Do not try to run via yul if explicitly denied.
+		m_testCaseWantsYulRun = false;
+		m_testCaseWantsLegacyRun = true;
+		// Do not try to run via yul and ewasm if explicitly denied.
 		m_enforceViaYul = false;
 		m_enforceCompileToEwasm = false;
 	}
-	else if (choice == "default")
+	else if (compileViaYul == "default")
 	{
-		m_runWithYul = false;
-		m_runWithoutYul = true;
+		m_testCaseWantsYulRun = false;
+		m_testCaseWantsLegacyRun = true;
 	}
 	else
-		BOOST_THROW_EXCEPTION(runtime_error("Invalid compileViaYul value: " + choice + "."));
+		BOOST_THROW_EXCEPTION(runtime_error("Invalid compileViaYul value: " + compileViaYul + "."));
 
 	string compileToEwasm = m_reader.stringSetting("compileToEwasm", "false");
 	if (compileToEwasm == "also")
-		m_runWithEwasm = true;
+		m_testCaseWantsEwasmRun = true;
 	else if (compileToEwasm == "false")
-		m_runWithEwasm = false;
+		m_testCaseWantsEwasmRun = false;
 	else
 		BOOST_THROW_EXCEPTION(runtime_error("Invalid compileToEwasm value: " + compileToEwasm + "."));
 
-	if (m_runWithEwasm && !m_runWithYul)
+	if (m_testCaseWantsEwasmRun && !m_testCaseWantsYulRun)
 		BOOST_THROW_EXCEPTION(runtime_error("Invalid compileToEwasm value: " + compileToEwasm + ", compileViaYul need to be enabled."));
 
 	// run ewasm tests only, if an ewasm evmc vm was defined
-	if (m_runWithEwasm && !m_supportsEwasm)
-		m_runWithEwasm = false;
+	if (m_testCaseWantsEwasmRun && !m_supportsEwasm)
+		m_testCaseWantsEwasmRun = false;
 
 	m_runWithABIEncoderV1Only = m_reader.boolSetting("ABIEncoderV1Only", false);
 	if (m_runWithABIEncoderV1Only && !solidity::test::CommonOptions::get().useABIEncoderV1)
@@ -128,16 +128,14 @@ SemanticTest::SemanticTest(
 TestCase::TestResult SemanticTest::run(ostream& _stream, string const& _linePrefix, bool _formatted)
 {
 	TestResult result = TestResult::Success;
-	bool compileViaYul = m_runWithYul || m_enforceViaYul;
-	bool compileToEwasm = m_runWithEwasm || m_enforceCompileToEwasm;
 
-	if (m_runWithoutYul)
+	if (m_testCaseWantsLegacyRun)
 		result = runTest(_stream, _linePrefix, _formatted, false, false);
 
-	if (compileViaYul && result == TestResult::Success)
+	if ((m_testCaseWantsYulRun || m_enforceViaYul) && result == TestResult::Success)
 		result = runTest(_stream, _linePrefix, _formatted, true, false);
 
-	if (compileToEwasm && result == TestResult::Success)
+	if ((m_testCaseWantsEwasmRun || m_enforceCompileToEwasm) && result == TestResult::Success)
 	{
 		try
 		{
@@ -156,32 +154,31 @@ TestCase::TestResult SemanticTest::runTest(
 	ostream& _stream,
 	string const& _linePrefix,
 	bool _formatted,
-	bool _compileViaYul,
-	bool _compileToEwasm
-)
+	bool _isYulRun,
+	bool _isEwasmRun)
 {
 	bool success = true;
 	m_gasCostFailure = false;
 
-	if (_compileViaYul && _compileToEwasm)
+	if (_isYulRun && _isEwasmRun)
 		selectVM(evmc_capabilities::EVMC_CAPABILITY_EWASM);
 	else
 		selectVM(evmc_capabilities::EVMC_CAPABILITY_EVM1);
 
 	reset();
 
-	m_compileViaYul = _compileViaYul;
-	if (_compileToEwasm)
+	m_compileViaYul = _isYulRun;
+	if (_isEwasmRun)
 	{
 		soltestAssert(m_compileViaYul, "");
-		m_compileToEwasm = _compileToEwasm;
+		m_compileToEwasm = _isEwasmRun;
 	}
 
-	m_compileViaYulCanBeSet = false;
-	m_compileToEwasmCanBeSet = false;
+	m_canEnableYulRun = false;
+	m_canEnableEwasmRun = false;
 
-	if (_compileViaYul)
-		AnsiColorized(_stream, _formatted, {BOLD, CYAN}) << _linePrefix << "Running via Yul:" << endl;
+	if (_isYulRun)
+		AnsiColorized(_stream, _formatted, {BOLD, CYAN}) << _linePrefix << "Running via Yul" << (_isEwasmRun ? " (ewasm):" : ":") << endl;
 
 	for (TestFunctionCall& test: m_tests)
 		test.reset();
@@ -233,7 +230,7 @@ TestCase::TestResult SemanticTest::runTest(
 		{
 			if (m_transactionSuccessful == test.call().expectations.failure)
 				success = false;
-			if (success && !checkGasCostExpectation(test, _compileViaYul))
+			if (success && !checkGasCostExpectation(test, _isYulRun))
 				m_gasCostFailure = true;
 
 			test.setFailure(!m_transactionSuccessful);
@@ -271,7 +268,7 @@ TestCase::TestResult SemanticTest::runTest(
 			}
 
 			bool outputMismatch = (output != test.call().expectations.rawBytes());
-			if (!outputMismatch && !checkGasCostExpectation(test, _compileViaYul))
+			if (!outputMismatch && !checkGasCostExpectation(test, _isYulRun))
 			{
 				success = false;
 				m_gasCostFailure = true;
@@ -290,9 +287,9 @@ TestCase::TestResult SemanticTest::runTest(
 		}
 	}
 
-	if (!m_runWithYul && _compileViaYul)
+	if (!m_testCaseWantsYulRun && _isYulRun)
 	{
-		m_compileViaYulCanBeSet = success;
+		m_canEnableYulRun = success;
 		string message = success ?
 			"Test can pass via Yul, but marked with \"compileViaYul: false.\"" :
 			"Test compiles via Yul, but it gives different test results.";
@@ -302,21 +299,24 @@ TestCase::TestResult SemanticTest::runTest(
 		return TestResult::Failure;
 	}
 
-	if (success && !m_runWithEwasm && _compileToEwasm)
+	if (success && !m_testCaseWantsEwasmRun && _isEwasmRun)
 	{
 		if (m_revertStrings != RevertStrings::Default)
 			return TestResult::Success;
 
-		m_compileToEwasmCanBeSet = true;
+		string message = success ?
+						 "Test can pass via Yul (ewasm), but marked with \"compileToEwasm: false.\"" :
+						 "Test compiles via Yul (ewasm), but it gives different test results.";
+		m_canEnableEwasmRun = true;
 		AnsiColorized(_stream, _formatted, {BOLD, YELLOW})
 			<< _linePrefix << endl
-			<< _linePrefix << "Test can pass via Yul (ewasm), but marked with \"compileToEwasm: false.\"" << endl;
+			<< _linePrefix << message << endl;
 		return TestResult::Failure;
 	}
 
-	if (!success && (m_runWithYul || !_compileViaYul))
+	if (!success && (m_testCaseWantsYulRun || !_isYulRun))
 	{
-		if (!m_runWithEwasm && m_enforceCompileToEwasm)
+		if (!m_testCaseWantsEwasmRun && m_enforceCompileToEwasm)
 			return TestResult::Success;
 
 		AnsiColorized(_stream, _formatted, {BOLD, CYAN}) << _linePrefix << "Expected result:" << endl;
@@ -349,13 +349,13 @@ TestCase::TestResult SemanticTest::runTest(
 		AnsiColorized(_stream, _formatted, {BOLD, RED})
 			<< _linePrefix << endl
 			<< _linePrefix << "Attention: Updates on the test will apply the detected format displayed." << endl;
-		if (_compileViaYul && m_runWithoutYul)
+		if (_isYulRun && m_testCaseWantsLegacyRun)
 		{
 			_stream << _linePrefix << endl << _linePrefix;
 			AnsiColorized(_stream, _formatted, {RED_BACKGROUND}) << "Note that the test passed without Yul.";
 			_stream << endl;
 		}
-		else if (!_compileViaYul && m_runWithYul)
+		else if (!_isYulRun && m_testCaseWantsYulRun)
 			AnsiColorized(_stream, _formatted, {BOLD, YELLOW})
 				<< _linePrefix << endl
 				<< _linePrefix << "Note that the test also has to pass via Yul." << endl;
@@ -449,31 +449,22 @@ void SemanticTest::printUpdatedExpectations(ostream& _stream, string const&) con
 void SemanticTest::printUpdatedSettings(ostream& _stream, string const& _linePrefix)
 {
 	auto& settings = m_reader.settings();
-	if (settings.empty() && !m_compileViaYulCanBeSet)
+	if (settings.empty() && !m_canEnableYulRun)
 		return;
 
 	_stream << _linePrefix << "// ====" << endl;
-	if (m_compileToEwasmCanBeSet)
+	if (m_canEnableEwasmRun)
 	{
-		// if test was already configured to run via yul,
-		// we need to preserve the original settings.
-		if (m_runWithYul)
-		{
-			// if test was also configured to run without yul.
-			if (m_runWithoutYul)
-				_stream << _linePrefix << "// compileViaYul: also\n";
-			// if test was configured only to run with yul.
-			else
-				_stream << _linePrefix << "// compileViaYul: true\n";
-		}
-
+		string compileViaYul = m_reader.stringSetting("compileViaYul", "");
+		if (!compileViaYul.empty())
+			_stream << _linePrefix << "// compileViaYul: " << compileViaYul << "\n";
 		_stream << _linePrefix << "// compileToEwasm: also\n";
 	}
-	else if (m_compileViaYulCanBeSet)
+	else if (m_canEnableYulRun)
 		_stream << _linePrefix << "// compileViaYul: also\n";
 
 	for (auto const& setting: settings)
-		if (!(m_compileViaYulCanBeSet || m_compileToEwasmCanBeSet) || setting.first != "compileViaYul")
+		if ((!m_canEnableYulRun && !m_canEnableEwasmRun) || setting.first != "compileViaYul")
 			_stream << _linePrefix << "// " << setting.first << ": " << setting.second << endl;
 }
 
