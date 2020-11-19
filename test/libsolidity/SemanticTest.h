@@ -46,6 +46,7 @@ public:
 			_options.evmVersion,
 			_options.vmPaths,
 			_options.enforceCompileViaYul,
+			_options.enforceCompileToEwasm,
 			_options.enforceGasCost,
 			_options.enforceGasCostMinValue
 		);
@@ -56,6 +57,7 @@ public:
 		langutil::EVMVersion _evmVersion,
 		std::vector<boost::filesystem::path> const& _vmPaths,
 		bool _enforceViaYul = false,
+		bool _enforceCompileToEwasm = false,
 		bool _enforceGasCost = false,
 		u256 _enforceGasCostMinValue = 100000
 	);
@@ -85,9 +87,11 @@ private:
 	bool m_runWithEwasm = false;
 	bool m_runWithoutYul = true;
 	bool m_enforceViaYul = false;
+	bool m_enforceCompileToEwasm = false;
 	bool m_runWithABIEncoderV1Only = false;
 	bool m_allowNonExistingFunctions = false;
 	bool m_compileViaYulCanBeSet = false;
+	bool m_compileToEwasmCanBeSet = false;
 	std::map<std::string, Builtin> m_builtins{};
 
 	bool m_gasCostFailure = false;

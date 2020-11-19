@@ -56,6 +56,7 @@ struct CommonOptions: boost::noncopyable
 	bool ewasm = false;
 	bool optimize = false;
 	bool enforceViaYul = false;
+	bool enforceCompileToEwasm = false;
 	bool enforceGasTest = false;
 	u256 enforceGasTestMinValue = 100000;
 	bool disableSMT = false;
