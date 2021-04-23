@@ -40,33 +40,33 @@ FunctionDefinition unusedFunctionsCommon::createLinkingFunction(
 	auto generateTypedName = [&](TypedName t)
 	{
 		return TypedName{
-			t.location,
+			t.debugData,
 			_nameDispenser.newName(t.name),
 			t.type
 		};
 	};
 
-	langutil::SourceLocation loc = _original.location;
+	std::shared_ptr<DebugData const> debugData = _original.debugData;
 
 	FunctionDefinition linkingFunction{
-		loc,
+		debugData,
 		_linkingFunctionName,
 		util::applyMap(_original.parameters, generateTypedName),
 		util::applyMap(_original.returnVariables, generateTypedName),
-		{loc, {}} // body
+		{debugData, {}} // body
 	};
 
-	FunctionCall call{loc, Identifier{loc, _originalFunctionName}, {}};
+	FunctionCall call{debugData, Identifier{debugData, _originalFunctionName}, {}};
 	for (auto const& p: filter(linkingFunction.parameters, _usedParametersAndReturns.first))
-		call.arguments.emplace_back(Identifier{loc, p.name});
+		call.arguments.emplace_back(Identifier{debugData, p.name});
 
-	Assignment assignment{loc, {}, nullptr};
+	Assignment assignment{debugData, {}, nullptr};
 
 	for (auto const& r: filter(linkingFunction.returnVariables, _usedParametersAndReturns.second))
-		assignment.variableNames.emplace_back(Identifier{loc, r.name});
+		assignment.variableNames.emplace_back(Identifier{debugData, r.name});
 
 	if (assignment.variableNames.empty())
-		linkingFunction.body.statements.emplace_back(ExpressionStatement{loc, std::move(call)});
+		linkingFunction.body.statements.emplace_back(ExpressionStatement{debugData, std::move(call)});
 	else
 	{
 		assignment.value = std::make_unique<Expression>(std::move(call));

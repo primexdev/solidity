@@ -37,6 +37,8 @@
 namespace solidity::yul
 {
 
+std::shared_ptr<DebugData const> createDebugData(langutil::SourceLocation);
+
 class Parser: public langutil::ParserBase
 {
 public:
@@ -70,7 +72,7 @@ protected:
 	template <class T> T createWithLocation() const
 	{
 		T r;
-		r.location = currentLocation();
+		r.debugData = createDebugData(currentLocation());
 		return r;
 	}
 
