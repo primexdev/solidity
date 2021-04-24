@@ -54,7 +54,8 @@ library strings {
         }
 
         // Copy remaining bytes
-        uint mask = 256 ** (32 - len) - 1;
+        uint mask;
+        unchecked { mask = 256 ** (32 - len) - 1; }
         assembly {
             let srcpart := and(mload(src), not(mask))
             let destpart := and(mload(dest), mask)
@@ -214,9 +215,10 @@ library strings {
                 // Mask out irrelevant bytes and check again
                 uint256 mask = type(uint256).max; // 0xffff...
                 if(shortest < 32) {
-                  mask = ~(2 ** (8 * (32 - shortest + idx)) - 1);
+                  unchecked { mask = ~(2 ** (8 * (32 - shortest + idx)) - 1); }
                 }
-                uint256 diff = (a & mask) - (b & mask);
+                uint256 diff;
+                unchecked { diff = (a & mask) - (b & mask); }
                 if (diff != 0)
                     return int(diff);
             }
